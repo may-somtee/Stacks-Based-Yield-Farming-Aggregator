@@ -110,3 +110,122 @@
   strategies-count: uint,
   compound-preference: bool ;; Whether user prefers auto-compounding
 })
+
+;; Strategy definitions
+(define-map strategies uint {
+  name: (string-ascii 64),
+  description: (string-ascii 256),
+  input-token: principal,
+  active: bool,
+  risk-level: (string-ascii 16), ;; "low", "medium", "high"
+  allocation-map: (list 10 {protocol: principal, pool-id: uint, allocation: uint}), ;; Protocol and allocation in percentage
+  total-allocation: uint, ;; Must sum to 10000 (100%)
+  total-apy: uint, ;; Combined APY in basis points
+  total-staked: uint, ;; Total amount staked in this strategy
+  share-price: uint, ;; Current price per share
+  share-token: principal, ;; Token representing shares
+  auto-compound: bool, ;; Whether strategy auto-compounds
+  last-rebalance-block: uint,
+  creation-block: uint,
+  performance-history: (list 30 {block: uint, apy: uint}) ;; Historical performance
+})
+
+;; Strategy counter
+(define-data-var next-strategy-id uint u1)
+
+;; Harvested rewards tracking
+(define-map harvested-rewards {protocol: principal, pool-id: uint} {
+  last-amount: uint,
+  total-amount: uint,
+  last-harvest-block: uint
+})
+
+;; Protocol revenue tracking
+(define-map protocol-revenue {
+  token: principal
+} {
+  performance-fees: uint,
+  withdrawal-fees: uint,
+  total-fees: uint
+})
+
+;; Historical APY data for each protocol
+(define-map protocol-apy-history {protocol: principal, day: uint} uint)
+
+;; User activity log
+(define-map user-activity {user: principal, activity-id: uint} {
+  activity-type: (string-ascii 16), ;; "deposit", "withdraw", "harvest", "claim"
+  strategy-id: uint,
+  amount: uint,
+  block-height: uint,
+  success: bool
+})
+
+;; User activity counter
+(define-map user-activity-count principal uint)
+
+;; === Protocol Management Functions ===
+
+;; Pause/unpause protocol
+(define-public (set-protocol-paused (paused bool))
+  (begin
+    (asserts! (is-eq tx-sender CONTRACT_OWNER) ERR_UNAUTHORIZED)
+    (ok (var-set protocol-paused paused))))
+
+;; Set fee parameters
+(define-public (set-performance-fee (fee-bps uint))
+  (begin
+    (asserts! (is-eq tx-sender CONTRACT_OWNER) ERR_UNAUTHORIZED)
+    (asserts! (<= fee-bps u2000) ERR_INVALID_AMOUNT) ;; Max 20% fee
+    (ok (var-set performance-fee-bps fee-bps))))
+
+(define-public (set-withdrawal-fee (fee-bps uint))
+  (begin
+    (asserts! (is-eq tx-sender CONTRACT_OWNER) ERR_UNAUTHORIZED)
+    (asserts! (<= fee-bps u500) ERR_INVALID_AMOUNT) ;; Max 5% fee
+    (ok (var-set withdrawal-fee-bps fee-bps))))
+
+;; Set fee allocations
+(define-public (set-fee-allocations (treasury uint) (staking uint) (insurance uint))
+  (begin
+    (asserts! (is-eq tx-sender CONTRACT_OWNER) ERR_UNAUTHORIZED)
+    (asserts! (is-eq (+ (+ treasury staking) insurance) u10000) ERR_INVALID_AMOUNT)
+    (var-set treasury-allocation treasury)
+    (var-set staking-allocation staking)
+    (var-set insurance-allocation insurance)
+    (ok true)))
+
+;; Set treasury and insurance fund addresses
+(define-public (set-treasury-address (address principal))
+  (begin
+    (asserts! (is-eq tx-sender CONTRACT_OWNER) ERR_UNAUTHORIZED)
+    (ok (var-set treasury-address address))))
+
+(define-public (set-insurance-fund-address (address principal))
+  (begin
+    (asserts! (is-eq tx-sender CONTRACT_OWNER) ERR_UNAUTHORIZED)
+    (ok (var-set insurance-fund-address address))))
+
+
+;; Add or update supported protocol
+(define-public (add-supported-protocol 
+                (protocol-address principal) 
+                (name (string-ascii 64))
+                (tvl-cap uint)
+                (risk-score uint)
+                (audited bool)
+                (protocol-type (string-ascii 32)))
+  (begin
+    (asserts! (is-eq tx-sender CONTRACT_OWNER) ERR_UNAUTHORIZED)
+    (asserts! (<= risk-score u100) ERR_INVALID_AMOUNT)
+    
+    (ok (map-set supported-protocols protocol-address {
+      name: name,
+      active: true,
+      tvl-cap: tvl-cap,
+      risk-score: risk-score,
+      audited: audited,
+      last-harvest-block: u0,
+      last-apr: u0,
+      protocol-type: protocol-type
+    }))))
