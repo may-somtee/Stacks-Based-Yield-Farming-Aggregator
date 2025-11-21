@@ -337,3 +337,114 @@
   claimed: bool,
   auto-renew: bool
 })
+
+(define-data-var next-vault-id uint u1)
+(define-map user-vault-count principal uint)
+
+;; ==== Dynamic Reward Booster System ====
+(define-map reward-boosters principal {
+  base-multiplier: uint, ;; Base reward multiplier
+  streak-bonus: uint, ;; Bonus for consecutive days
+  volume-bonus: uint, ;; Bonus based on volume
+  loyalty-bonus: uint, ;; Bonus for long-term holding
+  current-streak: uint,
+  last-activity-block: uint,
+  total-volume: uint
+})
+
+;; ==== Strategy Performance Competition ====
+(define-map strategy-competitions uint {
+  name: (string-ascii 64),
+  start-block: uint,
+  end-block: uint,
+  prize-pool: uint,
+  entry-fee: uint,
+  min-participants: uint,
+  max-participants: uint,
+  winner-strategy: uint,
+  active: bool,
+  participants: uint
+})
+
+(define-data-var next-competition-id uint u1)
+(define-map competition-participants {competition-id: uint, user: principal} uint) ;; strategy-id
+
+;; ==== Emergency Circuit Breaker ====
+(define-map circuit-breakers principal {
+  token: principal,
+  max-withdraw-per-block: uint,
+  current-block-withdrawals: uint,
+  last-reset-block: uint,
+  breaker-active: bool,
+  trigger-threshold: uint ;; Percentage of TVL
+})
+
+(define-map farming-certificates uint {
+  owner: principal,
+  strategy-id: uint,
+  deposit-amount: uint,
+  issue-block: uint,
+  tier: (string-ascii 16), ;; "bronze", "silver", "gold", "diamond"
+  transferable: bool,
+  boost-power: uint ;; Basis points boost to yields
+})
+
+(define-data-var next-certificate-id uint u1)
+
+(define-map social-profiles principal {
+  display-name: (string-ascii 32),
+  total-followers: uint,
+  total-following: uint,
+  public-strategies: uint,
+  reputation-score: uint,
+  verified: bool
+})
+
+(define-map social-follows {follower: principal, following: principal} bool)
+(define-map strategy-copies {copier: principal, original-strategy: uint} uint) ;; copied strategy id
+
+;; ==== NEW FEATURE: Risk Assessment Oracle ====
+(define-map risk-assessments principal {
+  overall-risk: uint, ;; 1-100
+  smart-contract-risk: uint,
+  liquidity-risk: uint,
+  market-risk: uint,
+  last-assessment: uint,
+  assessor: principal,
+  confidence-score: uint
+})
+
+;; ==== NEW FEATURE: Automated Portfolio Rebalancing ====
+(define-map auto-rebalance-configs principal {
+  enabled: bool,
+  target-allocations: (list 5 {strategy-id: uint, percentage: uint}),
+  rebalance-threshold: uint, ;; Percentage deviation to trigger
+  max-rebalance-frequency: uint, ;; Minimum blocks between rebalances
+  last-rebalance-block: uint,
+  rebalance-cost: uint
+})
+
+;; ==== NEW FEATURE: Milestone Achievement System ====
+(define-map user-milestones principal {
+  first-deposit: bool,
+  deposit-10k: bool,
+  deposit-100k: bool,
+  deposit-1m: bool,
+  hold-30-days: bool,
+  hold-1-year: bool,
+  refer-5-users: bool,
+  total-milestones: uint,
+  last-milestone-block: uint
+})
+
+;; ==== NEW FEATURE: Liquidity Mining Epochs ====
+(define-map mining-epochs uint {
+  start-block: uint,
+  end-block: uint,
+  total-rewards: uint,
+  reward-token: principal,
+  participating-strategies: (list 10 uint),
+  rewards-per-block: uint,
+  total-participants: uint,
+  distributed-rewards: uint
+})
