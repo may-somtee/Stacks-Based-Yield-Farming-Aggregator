@@ -229,3 +229,111 @@
       last-apr: u0,
       protocol-type: protocol-type
     }))))
+
+;; Update protocol status
+(define-public (update-protocol-status (protocol-address principal) (active bool))
+  (begin
+    (asserts! (is-eq tx-sender CONTRACT_OWNER) ERR_UNAUTHORIZED)
+    (let ((protocol (unwrap! (map-get? supported-protocols protocol-address) ERR_INVALID_PROTOCOL)))
+      (ok (map-set supported-protocols protocol-address (merge protocol {active: active}))))))
+
+;; Add or update farming pool
+(define-public (add-farming-pool 
+                (protocol-address principal) 
+                (pool-id uint)
+                (input-token principal)
+                (reward-token principal)
+                (max-capacity uint)
+                (compounded bool)
+                (impermanent-loss-factor uint)
+                (pool-address principal))
+  (begin
+    (asserts! (is-eq tx-sender CONTRACT_OWNER) ERR_UNAUTHORIZED)
+    (asserts! (not (is-none (map-get? supported-protocols protocol-address))) ERR_INVALID_PROTOCOL)
+    
+    (ok (map-set farming-pools {protocol: protocol-address, pool-id: pool-id} {
+      input-token: input-token,
+      reward-token: reward-token,
+      total-staked: u0,
+      current-apr: u0,
+      max-capacity: max-capacity,
+      active: true,
+      compounded: compounded,
+      last-harvest-block: u0,
+      last-rebalance-block: u0,
+      historical-apr: (list),
+      impermanent-loss-factor: impermanent-loss-factor,
+      address: pool-address
+    }))))
+
+;; Update token price
+(define-public (update-token-price (token principal) (price-in-ustx uint) (source (string-ascii 32)))
+  (begin
+    (asserts! (is-eq tx-sender CONTRACT_OWNER) ERR_UNAUTHORIZED)
+    
+    (ok (map-set token-prices token {
+      price-in-ustx: price-in-ustx,
+      last-updated: stacks-block-height,
+      source: source
+    }))))
+
+;; Set minimum deposit for a token
+(define-public (set-minimum-deposit (token principal) (min-amount uint))
+  (begin
+    (asserts! (is-eq tx-sender CONTRACT_OWNER) ERR_UNAUTHORIZED)
+    (ok (map-set minimum-deposits token min-amount))))
+
+
+(define-read-only (get-subscription-fee (tier (string-ascii 16)))
+  (if (is-eq tier "basic") u1000000
+    (if (is-eq tier "premium") u5000000
+      (if (is-eq tier "platinum") u10000000 u0))))
+
+(define-read-only (get-subscription-benefits (tier (string-ascii 16)))
+  (if (is-eq tier "basic") 
+    {reduced-fees: u100, max-strategies: u5, priority-rebalance: false, custom-strategies: false}
+    (if (is-eq tier "premium")
+      {reduced-fees: u300, max-strategies: u15, priority-rebalance: true, custom-strategies: false}
+      {reduced-fees: u500, max-strategies: u50, priority-rebalance: true, custom-strategies: true})))
+
+
+(define-map multisig-transactions uint {
+  initiator: principal,
+  target-contract: principal,
+  function-name: (string-ascii 32),
+  parameters: (buff 512),
+  confirmations: (list 10 principal),
+  required-confirmations: uint,
+  executed: bool,
+  expiry-block: uint
+})
+
+;; ==== NEW FEATURE: Additional Error Constants ====
+(define-constant ERR_WHITELIST_REQUIRED (err u1019))
+(define-constant ERR_COOLDOWN_ACTIVE (err u1020))
+(define-constant ERR_INVALID_SIGNATURE (err u1021))
+(define-constant ERR_DUPLICATE_ENTRY (err u1022))
+(define-constant ERR_REWARD_EXPIRED (err u1023))
+(define-constant ERR_VAULT_LOCKED (err u1024))
+
+(define-map vip-whitelist principal {
+  tier: uint, ;; 1=bronze, 2=silver, 3=gold, 4=platinum
+  added-by: principal,
+  added-at-block: uint,
+  fee-reduction: uint, ;; Basis points reduction
+  priority-access: bool,
+  custom-limits: bool
+})
+
+(define-data-var whitelist-enabled bool false)
+
+;; ==== Time-Locked Vault System ====
+(define-map time-locked-vaults {user: principal, vault-id: uint} {
+  token: principal,
+  amount: uint,
+  lock-duration: uint, ;; Blocks to lock
+  unlock-block: uint,
+  bonus-multiplier: uint, ;; Bonus APY multiplier in basis points
+  claimed: bool,
+  auto-renew: bool
+})
